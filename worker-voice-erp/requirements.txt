@@ -1,0 +1,9 @@
+﻿fastapi
+uvicorn[standard]
+sqlalchemy
+pydantic-settings
+PyJWT
+pwdlib[argon2]
+python-multipart
+pytest
+httpx
