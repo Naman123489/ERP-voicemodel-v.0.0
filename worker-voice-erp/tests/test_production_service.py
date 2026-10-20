@@ -1,10 +1,14 @@
-
 import pytest
 
-from app.db.models import Worker, Product
-from app.services.production_service import create_production_order
-
-
+from app.db.models import (
+    Worker,
+    Product,
+    ProductionOrder,
+)
+from app.services.production_service import (
+    create_production_order,
+    create_completion_draft,
+)
 class FakeDB:
     """A simple database substitute for testing order creation."""
 
@@ -131,3 +135,76 @@ def test_creating_order_does_not_change_inventory(
     )
 
     assert active_product.quantity_on_hand == initial_stock
+
+def test_completion_draft_is_created():
+    db = FakeDB()
+    order = ProductionOrder(
+        id="order-1",
+        worker_id="worker-1",
+        product_id="bicycle",
+        target_quantity=5,
+        status="created",
+        recipe_version=1,
+    )
+
+    draft = create_completion_draft(db, order, 3)
+
+    assert draft.order_id == "order-1"
+    assert draft.actual_completed_quantity == 3
+    assert draft.status == "pending_confirmation"
+    assert order.status == "pending_confirmation"
+    assert draft in db.added_objects
+    assert db.flush_called
+
+
+def test_completion_quantity_cannot_exceed_target():
+    db = FakeDB()
+    order = ProductionOrder(
+        id="order-1",
+        worker_id="worker-1",
+        product_id="bicycle",
+        target_quantity=5,
+        status="created",
+        recipe_version=1,
+    )
+
+    with pytest.raises(ValueError, match="cannot exceed"):
+        create_completion_draft(db, order, 6)
+
+    assert db.added_objects == []
+    assert order.status == "created"
+
+
+@pytest.mark.parametrize("quantity", [0, -1, True, 1.5])
+def test_invalid_completion_quantity_is_rejected(quantity):
+    db = FakeDB()
+    order = ProductionOrder(
+        id="order-1",
+        worker_id="worker-1",
+        product_id="bicycle",
+        target_quantity=5,
+        status="created",
+        recipe_version=1,
+    )
+
+    with pytest.raises(ValueError):
+        create_completion_draft(db, order, quantity)
+
+    assert db.added_objects == []
+
+
+def test_completed_order_cannot_create_another_draft():
+    db = FakeDB()
+    order = ProductionOrder(
+        id="order-1",
+        worker_id="worker-1",
+        product_id="bicycle",
+        target_quantity=5,
+        status="completed",
+        recipe_version=1,
+    )
+
+    with pytest.raises(ValueError, match="order status"):
+        create_completion_draft(db, order, 3)
+
+    assert db.added_objects == []
