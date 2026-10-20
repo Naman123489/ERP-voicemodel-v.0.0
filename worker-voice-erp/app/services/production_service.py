@@ -1,7 +1,7 @@
 from uuid import uuid4
 from datetime import datetime, timezone
 from sqlalchemy.orm import Session
-
+from sqlalchemy import update
 from app.db.models import (
     Worker,
     Product,
@@ -210,7 +210,24 @@ def confirm_completion(
 
         for name, amount in required.items():
             component = component_by_name[name]
-            component.quantity_on_hand -= amount
+
+            result = db.execute(
+                update(Component)
+                .where(
+                    Component.id == component.id,
+                    Component.quantity_on_hand >= amount,
+                )
+                .values(
+                    quantity_on_hand=Component.quantity_on_hand - amount
+                )
+                .execution_options(synchronize_session=False)
+            )
+
+            if result.rowcount != 1:
+                raise ValueError(
+                    f"Insufficient inventory: {name} stock changed "
+                    "during confirmation. Please retry."
+                )
 
             movements.append(
                 InventoryMovement(
@@ -225,7 +242,17 @@ def confirm_completion(
                 )
             )
 
-        product.quantity_on_hand += quantity
+        result = db.execute(
+            update(Product)
+            .where(Product.id == product.id)
+            .values(
+                quantity_on_hand=Product.quantity_on_hand + quantity
+            )
+            .execution_options(synchronize_session=False)
+        )
+
+        if result.rowcount != 1:
+            raise ValueError("Production order product was not found.")
 
         movements.append(
             InventoryMovement(
@@ -237,7 +264,6 @@ def confirm_completion(
                 quantity_delta=quantity,
             )
         )
-
         now = datetime.now(timezone.utc)
         draft.status = "confirmed"
         draft.confirmed_at = now
