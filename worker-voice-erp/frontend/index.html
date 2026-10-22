@@ -1,0 +1,65 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bicycle Assembly ERP</title>
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- login screen -->
+<main id="login-screen" class="box login-box">
+    <h1>Bicycle Assembly ERP</h1>
+    <p>Worker Login</p>
+
+    <form id="login-form">
+        <label for="username">Username</label>
+        <input type="text" id="username" placeholder="Enter your username" required>
+
+        <label for="password">Password</label>
+        <input type="password" id="password" placeholder="Enter your password" required>
+
+        <button type="submit">Sign in</button>
+        <p id="login-error" class="error"></p>
+    </form>
+</main>
+
+<!-- work screen (hidden until login) -->
+<main id="work-screen" class="box work-box" hidden>
+    <div class="top">
+        <h1>Bicycle Assembly</h1>
+        <span id="status">Ready</span>
+    </div>
+    <p id="dev-banner" hidden>DEV LOGIN ΓÇö not a real account. Orders need Person B's backend.</p>
+    <p id="order-info">No active order</p>
+
+    <ul id="messages"></ul>
+
+    <div id="confirm-buttons" hidden>
+        <button type="button" class="yes" onclick="sendText('yes')">Yes, save</button>
+        <button type="button" onclick="sendText('no')">No, change</button>
+        <button type="button" class="cancel" onclick="sendText('cancel')">Cancel</button>
+    </div>
+
+    <form id="message-form">
+        <button type="button" id="mic-button">≡ƒÄñ Speak</button>
+        <input type="text" id="message-input" placeholder="Type: 20 cycle assemble karo" autocomplete="off">
+        <button type="submit">Send</button>
+    </form>
+
+    <div class="bottom">
+        <button type="button" onclick="sendText('assembly finished')">Assembly finished</button>
+        <select id="speech-language">
+            <option value="en-IN">English</option>
+            <option value="hi-IN">αñ╣αñ┐αñ¿αÑìαñªαÑÇ</option>
+            <option value="mr-IN">αñ«αñ░αñ╛αñáαÑÇ</option>
+        </select>
+        <button type="button" id="logout-button">Log out</button>
+    </div>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
