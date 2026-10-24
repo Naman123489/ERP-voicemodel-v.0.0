@@ -46,12 +46,13 @@ def create_production_order(
         raise ValueError("Recipe version must be greater than zero.")
 
     order = ProductionOrder(
-        worker_id=worker.id,
-        product_id=product.id,
-        target_quantity=target_quantity,
-        status="created",
-        recipe_version=recipe_version,
-    )
+    id=str(uuid4()),
+    worker_id=worker.id,
+    product_id=product.id,
+    target_quantity=target_quantity,
+    status="created",
+    recipe_version=recipe_version,
+)
 
     db.add(order)
     db.flush()

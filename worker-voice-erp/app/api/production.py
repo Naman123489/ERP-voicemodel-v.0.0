@@ -4,9 +4,15 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-
+from app.api.auth import get_current_worker
 from app.db.database import get_db
-from app.db.models import Product, ProductionOrder, CompletionDraft, Worker
+from app.db.models import (
+    CompletionDraft,
+    IdempotencyRecord,
+    Product,
+    ProductionOrder,
+    Worker,
+)
 from app.schemas.production import (
     ProductionOrderCreate,
     ProductionOrderResponse,
@@ -21,42 +27,6 @@ from app.services.production_service import (
 )
 
 router = APIRouter(prefix="/production", tags=["Production"])
-
-
-def get_current_worker(
-    db: Session = Depends(get_db),
-    authorization: str | None = Header(default=None),
-) -> Worker:
-    """Temporary authentication dependency until the shared auth dependency is ready."""
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication required.",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    from app.core.security import decode_access_token
-
-    token = authorization.removeprefix("Bearer ").strip()
-
-    try:
-        worker_id = decode_access_token(token)
-    except (ValueError, RuntimeError):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired access token.",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    worker = db.get(Worker, worker_id)
-
-    if worker is None or not worker.active:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Worker account is unavailable.",
-        )
-
-    return worker
 
 
 @router.post(
@@ -127,6 +97,7 @@ def create_draft(
     "/orders/{order_id}/confirm-completion",
     response_model=CompletionConfirmationResponse,
 )
+
 def confirm_order_completion(
     order_id: str,
     idempotency_key: str = Header(alias="Idempotency-Key"),
@@ -136,16 +107,53 @@ def confirm_order_completion(
     order = db.get(ProductionOrder, order_id)
 
     if order is None:
-        raise HTTPException(status_code=404, detail="Production order not found.")
+        raise HTTPException(
+            status_code=404,
+            detail="Production order not found.",
+        )
 
     if order.worker_id != worker.id:
-        raise HTTPException(status_code=403, detail="You cannot access this order.")
+        raise HTTPException(
+            status_code=403,
+            detail="You cannot access this order.",
+        )
 
+    if not idempotency_key.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Idempotency key is required.",
+        )
+
+    # Return the original result for a repeated confirmation.
+    existing = db.scalar(
+        select(IdempotencyRecord).where(
+            IdempotencyRecord.idempotency_key == idempotency_key
+        )
+    )
+
+    if existing is not None:
+        draft = db.scalar(
+            select(CompletionDraft).where(
+                CompletionDraft.id
+                == existing.request_payload.get("completion_draft_id")
+            )
+        )
+
+        if (
+            existing.request_payload.get("order_id") != order_id
+            or draft is None
+            or draft.order_id != order_id
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail="Idempotency key was already used with a different request.",
+            )
+
+        return existing.response_payload
     draft = db.scalar(
         select(CompletionDraft)
         .where(CompletionDraft.order_id == order_id)
         .where(CompletionDraft.status == "pending_confirmation")
-        .order_by(CompletionDraft.id)
     )
 
     if draft is None:
@@ -155,12 +163,14 @@ def confirm_order_completion(
         )
 
     try:
-        result = confirm_completion(
+        return confirm_completion(
             db=db,
             order=order,
             draft=draft,
             idempotency_key=idempotency_key,
         )
-        return result
     except ValueError as exc:
-        raise HTTPException(status_code=409, detail=str(exc))
+        raise HTTPException(
+            status_code=409,
+            detail=str(exc),
+        )
