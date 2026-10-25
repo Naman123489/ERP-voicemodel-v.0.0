@@ -1,4 +1,4 @@
-﻿"""Voice API tests. Person B's production API is replaced by an httpx.MockTransport
+"""Voice API tests. Person B's production API is replaced by an httpx.MockTransport
 that returns contract-shaped responses and records every request we send."""
 
 import json
@@ -127,7 +127,7 @@ def test_session_cannot_be_used_by_another_login(api, backend):
 # --- contract shape and the full flow ---------------------------------------------
 
 def test_response_contains_contract_fields(api, backend):
-    r = Worker(api).say("20 cycle assemble karo")
+    r = Worker(api).say("Assemble 20 bicycles.")
     for key in ("session_id", "intent", "slots", "assistant_text", "requires_confirmation", "suggested_action"):
         assert key in r
     assert r["intent"] == "create_production_order"
@@ -135,20 +135,20 @@ def test_response_contains_contract_fields(api, backend):
     assert r["suggested_action"] == "create_order"
     assert r["assistant_text"] == "Assembling 20 bicycles. All parts are available. You can start."
     assert r["backend_response"]["status_code"] == 201
-    assert r["parse"]["original_text"] == "20 cycle assemble karo"
+    assert r["parse"]["original_text"] == "Assemble 20 bicycles."
     assert r["parse"]["confidence_available"] is False
     assert r["speech"]["text"] == r["assistant_text"]
 
 
 def test_full_flow_sends_contract_requests_in_order(api, backend):
     w = Worker(api)
-    w.say("20 cycle assemble karo")
-    assert w.say("Assembly ho gaya")["assistant_text"] == "How many bicycles did you assemble?"
+    w.say("Assemble 20 bicycles.")
+    assert w.say("Assembly done")["assistant_text"] == "How many bicycles did you assemble?"
     r = w.say("18")
     assert r["assistant_text"] == "18 bicycles assembled against 20. Shall I save?"
     assert r["requires_confirmation"] is True
     assert backend.ops("confirm") == []  # nothing finalized before explicit confirmation
-    r = w.say("Haan, save karo.")
+    r = w.say("Yes, save it.")
     assert r["outcome"] == "saved"
     assert r["assistant_text"] == "Saved. 18 bicycles added to stock."
 
@@ -165,7 +165,7 @@ def test_full_flow_sends_contract_requests_in_order(api, backend):
 
 def test_correction_sends_new_draft_and_new_confirmation(api, backend):
     w = Worker(api)
-    w.say("20 cycle assemble karo"); w.say("assembly done"); w.say("18")
+    w.say("Assemble 20 bicycles."); w.say("assembly done"); w.say("18")
     r = w.say("nahi 17")
     assert r["assistant_text"] == "17 bicycles assembled against 20. Shall I save?"
     w.say("haan")
@@ -175,7 +175,7 @@ def test_correction_sends_new_draft_and_new_confirmation(api, backend):
 
 def test_cancel_never_calls_confirmation(api, backend):
     w = Worker(api)
-    w.say("20 cycle assemble karo"); w.say("assembly done"); w.say("18")
+    w.say("Assemble 20 bicycles."); w.say("assembly done"); w.say("18")
     r = w.say("No, cancel.")
     assert r["backend_response"] is None
     assert backend.ops("confirm") == []
@@ -190,7 +190,7 @@ def test_unclear_speech_takes_no_backend_action(api, backend, text):
 
 def test_confirm_without_draft_calls_nothing(api, backend):
     w = Worker(api)
-    w.say("20 cycle assemble karo")
+    w.say("Assemble 20 bicycles.")
     r = w.say("Yes, save it.")
     assert "nothing to confirm" in r["assistant_text"].lower()
     assert backend.ops("confirm") == []
@@ -223,7 +223,7 @@ def _raise(exc):
 ])
 def test_failed_confirmation_is_never_reported_as_saved(api, backend, override, label):
     w = Worker(api)
-    w.say("20 cycle assemble karo"); w.say("assembly done"); w.say("18")
+    w.say("Assemble 20 bicycles."); w.say("assembly done"); w.say("18")
     backend.overrides["confirm"] = override
     r = w.say("haan")
     assert r["outcome"] != "saved"
@@ -235,7 +235,7 @@ def test_failed_confirmation_is_never_reported_as_saved(api, backend, override, 
 
 def test_timeout_then_retry_reuses_idempotency_key(api, backend):
     w = Worker(api)
-    w.say("20 cycle assemble karo"); w.say("assembly done"); w.say("18")
+    w.say("Assemble 20 bicycles."); w.say("assembly done"); w.say("18")
     backend.overrides["confirm"] = _raise(httpx.ReadTimeout)
     r = w.say("haan")
     assert r["outcome"] == "uncertain"
@@ -249,14 +249,14 @@ def test_timeout_then_retry_reuses_idempotency_key(api, backend):
 
 def test_missing_production_routes_are_reported(api, backend):
     backend.overrides["order"] = lambda r: httpx.Response(404, json={"detail": "Not Found"})
-    r = Worker(api).say("20 cycle assemble karo")
+    r = Worker(api).say("Assemble 20 bicycles.")
     assert "not available on the production server" in r["assistant_text"]
     assert r["dialogue_state"]["state"] == "idle"
 
 
 def test_unreachable_backend_on_order(api, backend):
     backend.overrides["order"] = _raise(httpx.ConnectError)
-    r = Worker(api).say("20 cycle assemble karo")
+    r = Worker(api).say("Assemble 20 bicycles.")
     assert r["outcome"] == "error"
     assert "could not reach" in r["assistant_text"].lower()
 
@@ -265,7 +265,7 @@ def test_unreachable_backend_on_order(api, backend):
 
 def test_reset_forgets_dialogue(api, backend):
     w = Worker(api)
-    w.say("20 cycle assemble karo")
+    w.say("Assemble 20 bicycles.")
     res = api.post("/api/v1/voice/reset", headers={"Authorization": TOKEN}, json={"session_id": w.session_id})
     assert res.status_code == 200 and res.json()["reset"] is True
     assert w.say("hello")["dialogue_state"]["state"] == "idle"
@@ -360,8 +360,8 @@ def test_speak_returns_playable_wav(api, tts_engine):
 
 
 @pytest.mark.parametrize("text,language,voice", [
-    ("αñ¼αÑÇαñ╕ αñ╕αñ╛αñçαñòαñ┐αñ▓ αñàαñ╕αÑçαñéαñ¼αñ▓ αñ╣αÑï αñùαñê αñ╣αÑê", "hi", "Divya"),
-    ("αñ╡αÑÇαñ╕ αñ╕αñ╛αñ»αñòαñ▓αÑÇ αñ¬αÑéαñ░αÑìαñú αñ¥αñ╛αñ▓αÑìαñ»αñ╛ αñåαñ╣αÑçαññ", "mr", "Sunita"),
+    ("बीस साइकिल असेंबल हो गई है", "hi", "Divya"),
+    ("वीस सायकली पूर्ण झाल्या आहेत", "mr", "Sunita"),
     ("Saved. 18 bicycles added to stock.", "en", "Mary"),
 ])
 def test_speak_picks_hindi_marathi_or_english_voice(api, tts_engine, text, language, voice):
@@ -370,8 +370,16 @@ def test_speak_picks_hindi_marathi_or_english_voice(api, tts_engine, text, langu
     assert res.headers["x-tts-voice"] == voice
 
 
-def test_speak_language_hint_wins(api, tts_engine):
-    assert speak(api, "theek hai", language="hi").headers["x-tts-language"] == "hi"
+def test_speak_language_hint_picks_hindi_or_marathi_voice(api, tts_engine):
+    # Devanagari is shared by Hindi and Marathi: the reply language decides the voice.
+    assert speak(api, "ठीक आहे", language="mr").headers["x-tts-language"] == "mr"
+    assert speak(api, "ठीक है", language="hi").headers["x-tts-language"] == "hi"
+
+
+def test_speak_never_reads_text_with_a_voice_for_another_script(api, tts_engine):
+    # A Hindi voice is not used for Latin text, and the English voice not for Devanagari.
+    assert speak(api, "Saved. 18 bicycles added to stock.", language="hi").headers["x-tts-language"] == "en"
+    assert speak(api, "सेव हो गया।", language="en").headers["x-tts-language"] == "hi"
 
 
 def test_repeated_sentence_is_generated_once(api, tts_engine):
@@ -418,7 +426,7 @@ def test_speak_requires_login_and_validates(api, tts_engine):
 def test_tts_failure_does_not_affect_voice_turn(api, backend):
     text_to_speech.set_engine(FakeTTSEngine(fail=True))
     try:
-        r = Worker(api).say("20 cycle assemble karo")
+        r = Worker(api).say("Assemble 20 bicycles.")
         assert r["assistant_text"].startswith("Assembling 20 bicycles")
         assert r["speech"]["server_audio"] is True and r["speech"]["text"] == r["assistant_text"]
     finally:
@@ -498,8 +506,8 @@ def test_indic_parler_adapter_follows_model_card(monkeypatch):
     monkeypatch.setitem(sys.modules, "transformers", types.SimpleNamespace(AutoTokenizer=AutoTokenizer))
 
     service = text_to_speech.TextToSpeechService(text_to_speech.IndicParlerEngine())
-    audio = service.speak("αñ¼αÑÇαñ╕ αñ╕αñ╛αñçαñòαñ┐αñ▓ αñàαñ╕αÑçαñéαñ¼αñ▓ αñ╣αÑï αñùαñê")
-    service.speak("αñ╡αÑÇαñ╕ αñ╕αñ╛αñ»αñòαñ▓αÑÇ αñ¬αÑéαñ░αÑìαñú αñ¥αñ╛αñ▓αÑìαñ»αñ╛")
+    audio = service.speak("बीस साइकिल असेंबल हो गई")
+    service.speak("वीस सायकली पूर्ण झाल्या")
 
     assert seen["model"] == "ai4bharat/indic-parler-tts" and seen["loads"] == 1  # loaded once, reused
     assert seen["tokenizers"] == ["ai4bharat/indic-parler-tts", "google/flan-t5-large"]
@@ -531,10 +539,10 @@ def test_indic_speak_adapter_uses_inference_py_from_model_dir(tmp_path):
     )
     engine = text_to_speech.IndicSpeakEngine(str(tmp_path))
     service = text_to_speech.TextToSpeechService(engine)
-    audio = service.speak("αñ╡αÑÇαñ╕ αñ╕αñ╛αñ»αñòαñ▓αÑÇ αñ¬αÑéαñ░αÑìαñú αñ¥αñ╛αñ▓αÑìαñ»αñ╛")
+    audio = service.speak("वीस सायकली पूर्ण झाल्या")
     service.speak("Saved. 18 bicycles added to stock.")
     assert audio.sample_rate == 24000 and audio.voice == "Anagha"
-    assert engine._tts.calls == [("αñ╡αÑÇαñ╕ αñ╕αñ╛αñ»αñòαñ▓αÑÇ αñ¬αÑéαñ░αÑìαñú αñ¥αñ╛αñ▓αÑìαñ»αñ╛", "Anagha"), ("Saved. 18 bicycles added to stock.", "Amit")]
+    assert engine._tts.calls == [("वीस सायकली पूर्ण झाल्या", "Anagha"), ("Saved. 18 bicycles added to stock.", "Amit")]
     with wave.open(io.BytesIO(audio.content)) as w:
         assert w.getframerate() == 24000 and w.getnframes() == 2400
 
@@ -675,11 +683,11 @@ def transcribe(api, audio, hint=None, token=TOKEN):
 
 
 def test_google_stt_sends_documented_v1_request_and_returns_transcript(api, google):
-    google.stt_response = google.response(("αñ¼αÑÇαñ╕ αñ╕αñ╛αñçαñòαñ┐αñ▓ αñàαñ╕αÑçαñéαñ¼αñ▓ αñòαñ░αÑï", 0.91))
+    google.stt_response = google.response(("बीस साइकिल असेंबल करो", 0.91))
     speech_to_text.set_engine(speech_to_text.GoogleSpeechEngine())
     res = transcribe(api, WEBM, hint="hi")
     assert res.status_code == 200
-    assert res.json() == {"transcript": "αñ¼αÑÇαñ╕ αñ╕αñ╛αñçαñòαñ┐αñ▓ αñàαñ╕αÑçαñéαñ¼αñ▓ αñòαñ░αÑï", "detected_language": "hi", "confidence": 0.91}
+    assert res.json() == {"transcript": "बीस साइकिल असेंबल करो", "detected_language": "hi", "confidence": 0.91}
     call = google.stt_calls[0]
     assert call["config"] == {
         "language_code": "hi-IN", "alternative_language_codes": ["en-IN", "mr-IN"], "model": "latest_short",
@@ -705,7 +713,7 @@ def test_google_stt_encoding_follows_the_audio_container(api, google, audio, exp
 def test_google_stt_language_configuration(api, google, monkeypatch):
     monkeypatch.setenv("GOOGLE_STT_LANGUAGE", "mr-IN")
     monkeypatch.setenv("GOOGLE_STT_ALTERNATIVE_LANGUAGES", "")
-    google.stt_response = google.response(("αñ╡αÑÇαñ╕", 0.7), language="mr-in")
+    google.stt_response = google.response(("वीस", 0.7), language="mr-in")
     speech_to_text.set_engine(speech_to_text.GoogleSpeechEngine())
     transcribe(api, WEBM)  # no hint -> configured default
     assert google.stt_calls[0]["config"]["language_code"] == "mr-IN"
@@ -819,8 +827,8 @@ def test_low_google_confidence_is_not_acted_on(api, backend, google):
 # --- Google Text-to-Speech ----------------------------------------------------------
 
 @pytest.mark.parametrize("text,voice,language_code", [
-    ("αñ¼αÑÇαñ╕ αñ╕αñ╛αñçαñòαñ┐αñ▓ αñàαñ╕αÑçαñéαñ¼αñ▓ αñ╣αÑï αñùαñê", "hi-IN-Standard-A", "hi-IN"),
-    ("αñ╡αÑÇαñ╕ αñ╕αñ╛αñ»αñòαñ▓αÑÇ αñ¬αÑéαñ░αÑìαñú αñ¥αñ╛αñ▓αÑìαñ»αñ╛ αñåαñ╣αÑçαññ", "mr-IN-Standard-A", "mr-IN"),
+    ("बीस साइकिल असेंबल हो गई", "hi-IN-Standard-A", "hi-IN"),
+    ("वीस सायकली पूर्ण झाल्या आहेत", "mr-IN-Standard-A", "mr-IN"),
     ("Saved. 18 bicycles added to stock.", "en-IN-Standard-A", "en-IN"),
 ])
 def test_google_tts_returns_mp3_with_language_voice(api, google, text, voice, language_code):
@@ -837,7 +845,7 @@ def test_google_tts_returns_mp3_with_language_voice(api, google, text, voice, la
 def test_google_tts_voice_is_configurable(api, google, monkeypatch):
     monkeypatch.setenv("GOOGLE_TTS_VOICE_HI", "hi-IN-Wavenet-D")
     text_to_speech.set_engine(text_to_speech.GoogleTextToSpeechEngine())
-    speak(api, "αñ¼αÑÇαñ╕ αñ╕αñ╛αñçαñòαñ┐αñ▓")
+    speak(api, "बीस साइकिल")
     assert google.tts_calls[0]["voice"] == {"language_code": "hi-IN", "name": "hi-IN-Wavenet-D"}
 
 
@@ -879,7 +887,7 @@ def test_google_tts_daily_character_limit(api, google, monkeypatch):
 def test_google_tts_failure_never_blocks_the_text_reply(api, backend, google):
     google.tts_error = google.exc.ResourceExhausted("quota")
     text_to_speech.set_engine(text_to_speech.GoogleTextToSpeechEngine())
-    r = Worker(api).say("20 cycle assemble karo")
+    r = Worker(api).say("Assemble 20 bicycles.")
     assert r["assistant_text"].startswith("Assembling 20 bicycles")
     assert speak(api, r["assistant_text"]).status_code == 429
 
@@ -923,6 +931,6 @@ def test_dev_token_is_just_forwarded_and_grants_nothing(api, backend, local_clie
     token = api.post("/api/v1/voice/dev-login", json={"username": "naman"}).json()["access_token"]
     backend.overrides["order"] = lambda r: httpx.Response(401, json={"error": {"code": "UNAUTHORIZED",
                                                                                  "message": "Invalid token."}})
-    r = Worker(api, token=f"Bearer {token}").say("20 cycle assemble karo")
+    r = Worker(api, token=f"Bearer {token}").say("Assemble 20 bicycles.")
     assert backend.calls[0]["headers"]["authorization"] == f"Bearer {token}"
     assert r["outcome"] == "error" and "not allowed" in r["assistant_text"]

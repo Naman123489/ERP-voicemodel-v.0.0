@@ -1,4 +1,4 @@
-﻿* {
+* {
     box-sizing: border-box;
 }
 
@@ -109,6 +109,15 @@ button:disabled {
     padding: 4px 12px;
     border: 1px solid #344357;
     border-radius: 20px;
+    font-size: 14px;
+}
+
+#language-badge {
+    margin-right: 6px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    background: #16294a;
+    color: #9daabd;
     font-size: 14px;
 }
 

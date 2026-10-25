@@ -1,4 +1,4 @@
-﻿"""Worker utterance -> intent + quantity (Person A).
+"""Worker utterance -> intent + quantity (Person A).
 
 Pure, deterministic text processing: no I/O, no state, no access to inventory
 or the database. The parser only classifies what the worker said. The dialogue
@@ -48,16 +48,16 @@ def normalize(text: str) -> str:
     fractional and negative quantities can be rejected rather than misread.
     """
     text = unicodedata.normalize("NFC", text or "").lower()
-    text = text.replace("αñ╝", "")  # nukta: αñûαñ╝ -> αñû
-    text = text.replace("αñü", "αñé")  # chandrabindu -> anusvara: αñ╣αñ╛αñü -> αñ╣αñ╛αñé
-    text = text.translate(str.maketrans("αÑªαÑºαÑ¿αÑ⌐αÑ¬αÑ½αÑ¼αÑ¡αÑ«αÑ»", "0123456789"))
+    text = text.replace("़", "")  # nukta: ख़ -> ख
+    text = text.replace("ँ", "ं")  # chandrabindu -> anusvara: हाँ -> हां
+    text = text.translate(str.maketrans("०१२३४५६७८९", "0123456789"))
     text = re.sub(r"(?<=\d)[.,](?=\d)", "\x00", text)
     text = re.sub(r"(?<![\w])-(?=\d)", "\x01", text)
     text = text.replace("'", "")  # "it's" -> "its"
     # Python's \w excludes Devanagari vowel signs, so keep the whole block
     # except danda, double danda and the abbreviation sign.
-    text = re.sub(r"[αÑñαÑÑαÑ░]", " ", text)
-    text = re.sub(r"[^\w\sαñÇ-αÑ┐\x00\x01]", " ", text)
+    text = re.sub(r"[।॥॰]", " ", text)
+    text = re.sub(r"[^\w\sऀ-ॿ\x00\x01]", " ", text)
     text = text.replace("\x00", ".").replace("\x01", "-")
     return " ".join(text.split())
 
@@ -81,24 +81,24 @@ EN_TENS = {
 
 INDIC_NUMBERS = {
     # Hindi (romanized + Devanagari)
-    "shunya": 0, "αñ╢αÑéαñ¿αÑìαñ»": 0, "ek": 1, "αñÅαñò": 1, "do": 2, "αñªαÑï": 2, "teen": 3, "αññαÑÇαñ¿": 3,
-    "char": 4, "chaar": 4, "αñÜαñ╛αñ░": 4, "paanch": 5, "panch": 5, "αñ¬αñ╛αñéαñÜ": 5,
-    "chhe": 6, "chhah": 6, "αñ¢αñ╣": 6, "saat": 7, "αñ╕αñ╛αññ": 7, "aath": 8, "αñåαñá": 8,
-    "nau": 9, "αñ¿αÑî": 9, "das": 10, "αñªαñ╕": 10, "gyarah": 11, "αñùαÑìαñ»αñ╛αñ░αñ╣": 11,
-    "barah": 12, "αñ¼αñ╛αñ░αñ╣": 12, "terah": 13, "αññαÑçαñ░αñ╣": 13, "chaudah": 14, "αñÜαÑîαñªαñ╣": 14,
-    "pandrah": 15, "αñ¬αñéαñªαÑìαñ░αñ╣": 15, "solah": 16, "αñ╕αÑïαñ▓αñ╣": 16, "satrah": 17, "αñ╕αññαÑìαñ░αñ╣": 17,
-    "atharah": 18, "athara": 18, "αñàαñáαñ╛αñ░αñ╣": 18, "unnis": 19, "αñëαñ¿αÑìαñ¿αÑÇαñ╕": 19,
-    "bees": 20, "αñ¼αÑÇαñ╕": 20, "ikkis": 21, "αñçαñòαÑìαñòαÑÇαñ╕": 21, "bais": 22, "αñ¼αñ╛αñêαñ╕": 22,
-    "teis": 23, "αññαÑçαñêαñ╕": 23, "chaubis": 24, "αñÜαÑîαñ¼αÑÇαñ╕": 24, "pachchis": 25, "pachis": 25,
-    "αñ¬αñÜαÑìαñÜαÑÇαñ╕": 25, "tees": 30, "αññαÑÇαñ╕": 30, "chalis": 40, "αñÜαñ╛αñ▓αÑÇαñ╕": 40,
-    "pachas": 50, "αñ¬αñÜαñ╛αñ╕": 50, "sau": 100, "αñ╕αÑî": 100,
+    "shunya": 0, "शून्य": 0, "ek": 1, "एक": 1, "do": 2, "दो": 2, "teen": 3, "तीन": 3,
+    "char": 4, "chaar": 4, "चार": 4, "paanch": 5, "panch": 5, "पांच": 5,
+    "chhe": 6, "chhah": 6, "छह": 6, "saat": 7, "सात": 7, "aath": 8, "आठ": 8,
+    "nau": 9, "नौ": 9, "das": 10, "दस": 10, "gyarah": 11, "ग्यारह": 11,
+    "barah": 12, "बारह": 12, "terah": 13, "तेरह": 13, "chaudah": 14, "चौदह": 14,
+    "pandrah": 15, "पंद्रह": 15, "solah": 16, "सोलह": 16, "satrah": 17, "सत्रह": 17,
+    "atharah": 18, "athara": 18, "अठारह": 18, "unnis": 19, "उन्नीस": 19,
+    "bees": 20, "बीस": 20, "ikkis": 21, "इक्कीस": 21, "bais": 22, "बाईस": 22,
+    "teis": 23, "तेईस": 23, "chaubis": 24, "चौबीस": 24, "pachchis": 25, "pachis": 25,
+    "पच्चीस": 25, "tees": 30, "तीस": 30, "chalis": 40, "चालीस": 40,
+    "pachas": 50, "पचास": 50, "sau": 100, "सौ": 100,
     # Marathi
-    "don": 2, "αñªαÑïαñ¿": 2, "pach": 5, "αñ¬αñ╛αñÜ": 5, "saha": 6, "αñ╕αñ╣αñ╛": 6, "αñ¿αñè": 9,
-    "daha": 10, "αñªαñ╣αñ╛": 10, "akra": 11, "αñàαñòαñ░αñ╛": 11, "bara": 12, "αñ¼αñ╛αñ░αñ╛": 12,
-    "tera": 13, "αññαÑçαñ░αñ╛": 13, "chauda": 14, "αñÜαÑîαñªαñ╛": 14, "pandhra": 15, "αñ¬αñéαñºαñ░αñ╛": 15,
-    "sola": 16, "αñ╕αÑïαñ│αñ╛": 16, "satra": 17, "αñ╕αññαñ░αñ╛": 17, "athra": 18, "αñàαñáαñ░αñ╛": 18,
-    "ekonis": 19, "αñÅαñòαÑïαñúαÑÇαñ╕": 19, "vees": 20, "αñ╡αÑÇαñ╕": 20, "panchvis": 25, "αñ¬αñéαñÜαñ╡αÑÇαñ╕": 25,
-    "αñÜαñ╛αñ│αÑÇαñ╕": 40, "pannas": 50, "αñ¬αñ¿αÑìαñ¿αñ╛αñ╕": 50,
+    "don": 2, "दोन": 2, "pach": 5, "पाच": 5, "saha": 6, "सहा": 6, "नऊ": 9,
+    "daha": 10, "दहा": 10, "akra": 11, "अकरा": 11, "bara": 12, "बारा": 12,
+    "tera": 13, "तेरा": 13, "chauda": 14, "चौदा": 14, "pandhra": 15, "पंधरा": 15,
+    "sola": 16, "सोळा": 16, "satra": 17, "सतरा": 17, "athra": 18, "अठरा": 18,
+    "ekonis": 19, "एकोणीस": 19, "vees": 20, "वीस": 20, "panchvis": 25, "पंचवीस": 25,
+    "चाळीस": 40, "pannas": 50, "पन्नास": 50,
 }
 INDIC_NUMBERS = {normalize(k): v for k, v in INDIC_NUMBERS.items()}
 
@@ -107,67 +107,79 @@ INDIC_NUMBERS = {normalize(k): v for k, v in INDIC_NUMBERS.items()}
 CONTEXT_ONLY_NUMBERS = _norm_set(["do", "tera", "sau", "bara"])
 
 FRACTION_WORDS = _norm_set([
-    "half", "aadha", "adha", "αñåαñºαñ╛", "dhai", "αñóαñ╛αñê", "dedh", "αñíαÑçαñóαñ╝", "sadhe", "αñ╕αñ╛αñóαñ╝αÑç",
-    "adich", "αñàαñíαÑÇαñÜ", "didh", "αñªαÑÇαñí", "quarter", "pauna", "αñ¬αÑîαñ¿αÑç",
+    "half", "aadha", "adha", "आधा", "dhai", "ढाई", "dedh", "डेढ़", "sadhe", "साढ़े",
+    "adich", "अडीच", "didh", "दीड", "quarter", "pauna", "पौने",
 ])
 
 BICYCLE_WORDS = _norm_set([
     "cycle", "cycles", "bicycle", "bicycles", "bike", "bikes", "saikil",
-    "αñ╕αñ╛αñçαñòαñ┐αñ▓", "αñ╕αñ╛αñçαñòαñ┐αñ▓αÑçαñé", "αñ╕αñ╛αñêαñòαñ┐αñ▓", "αñ╕αñ╛αñ»αñòαñ▓", "αñ╕αñ╛αñ»αñòαñ▓αÑÇ", "αñ╕αñ╛αñ»αñòαñ▓αÑçαñé",
-    "piece", "pieces", "nag", "αñ¿αñù",
+    "साइकिल", "साइकिलें", "साईकिल", "सायकल", "सायकली", "सायकलें",
+    "piece", "pieces", "nag", "नग",
 ])
 
 CANCEL_PHRASES = _norm_set([
     "cancel", "cancelled", "abort", "stop", "rad karo", "radd karo", "radd",
-    "αñ░αñªαÑìαñª", "αñ░αñªαÑìαñª αñòαñ░αÑï", "αñ░αñªαÑìαñª αñòαñ░αñ╛", "band karo", "αñ¼αñéαñª αñòαñ░αÑï", "αñ¼αñéαñª αñòαñ░αñ╛",
-    "mat karo", "αñ«αññ αñòαñ░αÑï", "rehne do", "αñ░αñ╣αñ¿αÑç αñªαÑï", "nako", "αñ¿αñòαÑï",
+    "रद्द", "रद्द करो", "रद्द करा", "band karo", "बंद करो", "बंद करा",
+    "mat karo", "मत करो", "rehne do", "रहने दो", "nako", "नको",
 ])
 NEGATION_PHRASES = _norm_set([
-    "no", "nope", "not", "nahi", "nahin", "nai", "αñ¿αñ╣αÑÇαñé", "αñ¿αñ╣αÑÇ", "αñ¿αñ╛αñ╣αÑÇ",
-    "wrong", "galat", "αñùαñ▓αññ", "chuk", "αñÜαÑéαñò", "αñÜαÑüαñòαÑÇαñÜαÑç",
+    "no", "nope", "not", "nahi", "nahin", "nai", "नहीं", "नही", "नाही",
+    "wrong", "galat", "गलत", "chuk", "चूक", "चुकीचे",
 ])
 CORRECTION_PHRASES = _norm_set([
-    "correction", "actually", "sorry", "instead", "change", "badlo", "αñ¼αñªαñ▓αÑï", "αñ¼αñªαñ▓αñ╛",
-    "matlab", "αñ«αññαñ▓αñ¼", "i mean",
+    "correction", "actually", "sorry", "instead", "change", "badlo", "बदलो", "बदला",
+    "matlab", "मतलब", "i mean",
 ])
 CONFIRM_PHRASES = _norm_set([
     "yes", "yeah", "yep", "haan", "haa", "han", "ha", "haanji", "haan ji", "ji haan",
-    "αñ╣αñ╛αñü", "αñ╣αñ╛αñé", "αñ╣αñ╛", "αñ╣αÑïαñ»", "hoy", "theek hai", "thik hai", "αñáαÑÇαñò αñ╣αÑê",
-    "sahi hai", "αñ╕αñ╣αÑÇ αñ╣αÑê", "save karo", "save kara", "save it", "save",
-    "confirm", "confirmed", "ok", "okay", "αñ¼αñ░αÑïαñ¼αñ░", "barobar", "go ahead",
+    "हाँ", "हां", "हा", "होय", "hoy", "theek hai", "thik hai", "ठीक है",
+    "sahi hai", "सही है", "save karo", "save kara", "save it", "save",
+    "confirm", "confirmed", "ok", "okay", "बरोबर", "barobar", "go ahead",
+    "ho", "हो", "सेव करो", "सेव करा", "सेव्ह करा", "सेव्ह करो",
 ])
 # Whole-utterance-only confirmations (too short / overloaded inside sentences).
-CONFIRM_EXACT = _norm_set(["ho", "αñ╣αÑï", "ji", "αñ£αÑÇ"])
+CONFIRM_EXACT = _norm_set(["ho", "हो", "ji", "जी"])
 # Words allowed next to a confirmation word. Anything else makes it unclear.
 CONFIRM_FILLERS = _norm_set([
     "it", "please", "pls", "ji", "jee", "now", "this", "that", "do", "karo", "kara",
-    "kar", "αñòαñ░αÑï", "αñòαñ░αñ╛", "αñòαñ░", "αñªαÑï", "sure", "correct", "right", "bilkul", "αñ¼αñ┐αñ▓αñòαÑüαñ▓",
-    "hai", "αñ╣αÑê", "aahe", "αñåαñ╣αÑç", "sir", "go", "ahead", "αñ╕αÑçαñ╡",
+    "kar", "करो", "करा", "कर", "दो", "sure", "correct", "right", "bilkul", "बिलकुल",
+    "hai", "है", "aahe", "आहे", "sir", "go", "ahead", "सेव", "सेव्ह", "save",
 ])
 
 FINISHED_PHRASES = _norm_set([
-    "ho gaya", "ho gayi", "ho gaye", "ho gai", "αñ╣αÑï αñùαñ»αñ╛", "αñ╣αÑï αñùαñê", "αñ╣αÑï αñùαñÅ", "αñ╣αÑï αñùαñ»αÑç",
-    "finished", "finish", "done", "complete", "completed", "khatam", "αñûαññαÑìαñ«",
+    "ho gaya", "ho gayi", "ho gaye", "ho gai", "हो गया", "हो गई", "हो गए", "हो गये",
+    "finished", "finish", "done", "complete", "completed", "khatam", "खत्म",
     "assembled", "built", "made", "produced", "ban gaye", "ban gayi", "ban gaya",
-    "αñ¼αñ¿ αñùαñÅ", "αñ¼αñ¿ αñùαñê", "αñ¼αñ¿ αñùαñ»αñ╛", "kar liya", "kar liye", "αñòαñ░ αñ▓αñ┐αñ»αñ╛", "αñòαñ░ αñ▓αñ┐αñÅ",
-    "pura", "αñ¬αÑéαñ░αñ╛", "αñ¬αÑéαñ░αÑìαñú", "zala", "jhala", "zale", "jhale", "αñ¥αñ╛αñ▓αñ╛", "αñ¥αñ╛αñ▓αÑç", "αñ¥αñ╛αñ▓αÑÇ",
-    "sampla", "αñ╕αñéαñ¬αñ▓αÑç", "αñ╕αñéαñ¬αñ▓αñ╛", "kele", "αñòαÑçαñ▓αÑç", "αñòαÑçαñ▓αÑìαñ»αñ╛", "tayyar hai", "αññαÑêαñ»αñ╛αñ░ αñ╣αÑê",
+    "बन गए", "बन गई", "बन गया", "kar liya", "kar liye", "कर लिया", "कर लिए",
+    "pura", "पूरा", "पूर्ण", "zala", "jhala", "zale", "jhale", "झाला", "झाले", "झाली",
+    "sampla", "संपले", "संपला", "kele", "केले", "केल्या", "tayyar hai", "तैयार है",
+    "झाल्या", "jhalya", "zalya", "तयार झाल्या", "तयार झाले", "बन गई हैं", "हो गई हैं",
 ])
 ASSEMBLE_PHRASES = _norm_set([
-    "assemble", "assembly", "αñàαñ╕αÑçαñéαñ¼αñ▓", "αñàαñ╕αÑçαñéαñ¼αñ▓αÑÇ", "αñàαñ╕αÑçαñ«αÑìαñ¼αñ▓", "banao", "αñ¼αñ¿αñ╛αñô",
-    "banana", "αñ¼αñ¿αñ╛αñ¿αñ╛", "banva", "αñ¼αñ¿αñ╡αñ╛", "build", "make", "produce", "manufacture",
-    "start", "shuru", "αñ╢αÑüαñ░αÑé", "αñ╕αÑüαñ░αÑé", "tayar kara", "αññαñ»αñ╛αñ░ αñòαñ░αñ╛", "αññαÑêαñ»αñ╛αñ░ αñòαñ░αÑï",
+    "assemble", "assembly", "असेंबल", "असेंबली", "असेम्बल", "banao", "बनाओ",
+    "banana", "बनाना", "banva", "बनवा", "build", "make", "produce", "manufacture",
+    "start", "shuru", "शुरू", "सुरू", "tayar kara", "तयार करा", "तैयार करो",
 ])
 
 HINDI_MARKERS = _norm_set([
-    "karo", "kar", "αñòαñ░αÑï", "gaya", "αñùαñ»αñ╛", "gaye", "αñùαñÅ", "nahi", "αñ¿αñ╣αÑÇαñé", "haan", "αñ╣αñ╛αñé",
-    "banao", "αñ¼αñ¿αñ╛αñô", "theek", "αñáαÑÇαñò", "hai", "αñ╣αÑê", "αñ╕αñ╛αñçαñòαñ┐αñ▓", "αñ¼αÑÇαñ╕", "athara", "bees",
-    "mat", "khatam", "ban",
+    "karo", "kar", "करो", "gaya", "गया", "gaye", "गए", "nahi", "नहीं", "haan", "हां",
+    "banao", "बनाओ", "theek", "ठीक", "hai", "है", "साइकिल", "बीस", "athara", "bees",
+    "mat", "khatam", "ban", "हैं", "गई", "बन", "कीं", "किया", "करें", "अठारह",
+    "nahin", "gayi", "gai", "rahe",
 ])
 MARATHI_MARKERS = _norm_set([
-    "kara", "αñòαñ░αñ╛", "zala", "jhala", "αñ¥αñ╛αñ▓αñ╛", "αñ¥αñ╛αñ▓αÑç", "nako", "αñ¿αñòαÑï", "hoy", "αñ╣αÑïαñ»",
-    "αñ╕αñ╛αñ»αñòαñ▓", "αñ╕αñ╛αñ»αñòαñ▓αÑÇ", "αñ╡αÑÇαñ╕", "vees", "αñªαÑïαñ¿", "αñ¬αñ╛αñÜ", "aahe", "αñåαñ╣αÑç", "αñ¿αñ╛αñ╣αÑÇ",
-    "αñ¼αñ░αÑïαñ¼αñ░", "barobar", "αñ¬αÑéαñ░αÑìαñú", "athra", "αñàαñáαñ░αñ╛", "banva", "αñ¼αñ¿αñ╡αñ╛",
+    "kara", "करा", "zala", "jhala", "झाला", "झाले", "nako", "नको", "hoy", "होय",
+    "सायकल", "सायकली", "वीस", "vees", "दोन", "पाच", "aahe", "आहे", "नाही",
+    "बरोबर", "barobar", "पूर्ण", "athra", "अठरा", "banva", "बनवा",
+    "झाल्या", "झाली", "आहेत", "तयार", "केल्या", "सेव्ह", "jhalya", "zalya", "aahet", "naahi",
+])
+# English words that only appear in English sentences of this domain. Hindi or
+# Marathi grammar words win over these, so "20 cycle assemble karo" is Hindi.
+ENGLISH_MARKERS = _norm_set([
+    "i", "we", "it", "the", "to", "want", "please", "yes", "no", "cancel", "save",
+    "assemble", "assembled", "bicycle", "bicycles", "bikes", "done", "finished",
+    "completed", "how", "many", "okay", "ok", "stop", "wrong", "correct", "actually",
+    "made", "built", "have", "has", "is", "are", "was",
 ])
 
 
@@ -300,13 +312,53 @@ def extract_numbers(tokens: list[str]) -> tuple[list[int], Optional[str]]:
     return numbers, invalid
 
 
+# Marathi verb/grammar words that Hindi does not use. If speech recognised with
+# an English/Hindi model contains one, the worker was probably speaking Marathi.
+MARATHI_GRAMMAR = _norm_set([
+    "करा", "झाले", "झाला", "झाली", "झाल्या", "आहे", "आहेत", "नाही", "नको", "होय",
+    "kara", "zala", "jhala", "zale", "jhale", "aahe", "aahet", "nako", "hoy",
+])
+
+
+def has_marathi_grammar(text: str) -> bool:
+    norm = normalize(text)
+    return bool(norm) and _has_phrase(f" {norm} ", MARATHI_GRAMMAR)
+
+
+def _count_phrases(padded: str, phrases) -> int:
+    return sum(1 for p in phrases if f" {p} " in padded)
+
+
+def dominant_language(text: str) -> Optional[str]:
+    """The language whose grammar words dominate the sentence: en, hi, mr or None.
+
+    Counts distinct marker words, never a single look-alike noun: Hindi/Marathi
+    grammar words (karo/करो, kara/करा, gaye/गए, झाले/झाल्या, ...) decide a
+    code-switched sentence; English counts only when no Hindi/Marathi marker is
+    present. A tie, or Devanagari without markers, returns None (undecided).
+    """
+    norm = normalize(text)
+    if not norm:
+        return None
+    padded = f" {norm} "
+    hi = _count_phrases(padded, HINDI_MARKERS)
+    mr = _count_phrases(padded, MARATHI_MARKERS)
+    if hi != mr:
+        return "hi" if hi > mr else "mr"
+    if hi:  # tie between Hindi and Marathi evidence
+        return None
+    if re.search(r"[ऀ-ॿ]", norm):
+        return None
+    return "en" if _count_phrases(padded, ENGLISH_MARKERS) else None
+
+
 def detect_language(text: str) -> str:
     """Heuristic language label (en/hi/mr/mixed/unknown) from script and marker words."""
     norm = normalize(text)
     if not norm:
         return "unknown"
     padded = f" {norm} "
-    has_deva = bool(re.search(r"[αñÇ-αÑ┐]", norm))
+    has_deva = bool(re.search(r"[ऀ-ॿ]", norm))
     has_latin = bool(re.search(r"[a-z]", norm))
     hi = _has_phrase(padded, HINDI_MARKERS)
     mr = _has_phrase(padded, MARATHI_MARKERS)
@@ -414,7 +466,7 @@ def parse(text: str, confidence: Optional[float] = None) -> ParsedCommand:
 
     # Bare quantity: "18", "athara", "18 cycle".
     leftover = [t for t in tokens if not (
-        _is_number_token(t) or t in BICYCLE_WORDS or t in {"only", "sirf", "bas", "αñ½αñòαÑìαññ", "αñ╕αñ┐αñ░αÑìαñ½"}
+        _is_number_token(t) or t in BICYCLE_WORDS or t in {"only", "sirf", "bas", "फक्त", "सिर्फ"}
     )]
     if (numbers or invalid) and not leftover:
         return intent("provide_completed_quantity", "completed")

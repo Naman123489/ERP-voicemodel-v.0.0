@@ -1,10 +1,12 @@
-﻿"""Speech-to-text behind a replaceable interface (Person A).
+"""Speech-to-text behind a replaceable interface (Person A).
 
 Engines (``STT_ENGINE``):
 
 * ``none`` (default): no server recognition. The UI uses the browser's own
   speech recognition, and typing always works.
-* ``google``: Google Cloud Speech-to-Text **v1** ``recognize`` (synchronous,
+* ``google``: Google Cloud Speech-to-Text **v2** with ``chirp_3``, which
+  identifies English/Hindi/Marathi by itself (see ``GoogleChirpSpeechEngine``).
+* ``google-v1``: Google Cloud Speech-to-Text **v1** ``recognize`` (synchronous,
   under 60 s / 10 MB per request) via the official ``google-cloud-speech``
   package. Hindi ``hi-IN``, Marathi ``mr-IN`` and English ``en-IN`` are listed
   for the ``latest_short`` model on Google's v1 language page.
@@ -215,7 +217,7 @@ def sniff_audio_format(audio: bytes) -> Optional[str]:
 class GoogleSpeechEngine:
     """Google Cloud Speech-to-Text v1 synchronous recognition."""
 
-    name = "google"
+    name = "google-v1"
     OPUS_SAMPLE_RATE = 48000  # what browsers record; one of the rates v1 accepts for Opus
 
     def __init__(self):
@@ -324,13 +326,156 @@ class GoogleSpeechEngine:
 
 
 def _label(google_language: Optional[str], transcript: str) -> str:
-    """Google returns e.g. 'hi-in'; map to our en/hi/mr/mixed labels."""
+    """Language Google identified from the audio ('hi-in' -> 'hi').
+
+    Google's language id comes from the sound itself, so it is reported as is;
+    the voice API weighs it against the words in the transcript. Without it,
+    fall back to the transcript's script/words.
+    """
     if google_language:
         short = google_language.split("-")[0].lower()
         if short in LANGUAGE_HINTS:
-            detected = detect_language(transcript)
-            return "mixed" if detected == "mixed" else short
+            return short
     return detect_language(transcript)
+
+
+class GoogleChirpSpeechEngine:
+    """Google Cloud Speech-to-Text v2 with the ``chirp_3`` model: automatic language.
+
+    Measured on this project (Oct 2026): ``chirp_3`` accepts
+    ``language_codes=["en-IN", "hi-IN"]`` and labels each result with the language
+    it heard, but rejects Marathi (a Preview language) inside a list, while
+    ``["mr-IN"]`` alone recognises Marathi correctly. So:
+
+    1. One request with English+Hindi (or Marathi first if the conversation is
+       already in Marathi).
+    2. A second, Marathi-only request only when the words contain Marathi grammar
+       (or a Marathi-first attempt looks like English/Hindi). Never in parallel.
+
+    ``chirp_3`` returns no confidence score; it is reported as ``None``.
+    Settings: ``GOOGLE_CLOUD_PROJECT`` (else the credentials' quota project),
+    ``GOOGLE_STT_LOCATION`` (default ``eu``), ``GOOGLE_STT_V2_MODEL`` (default
+    ``chirp_3``), plus the timeout and daily limit shared with the v1 engine.
+    """
+
+    name = "google"
+    PRIMARY_CODES = ["en-IN", "hi-IN"]
+    MARATHI_CODES = ["mr-IN"]
+
+    def __init__(self):
+        self.location = os.getenv("GOOGLE_STT_LOCATION", "eu").strip() or "eu"
+        self.model = os.getenv("GOOGLE_STT_V2_MODEL", "chirp_3").strip() or "chirp_3"
+        self.timeout = float(os.getenv("GOOGLE_STT_TIMEOUT_SECONDS", "15"))
+        self.project = os.getenv("GOOGLE_CLOUD_PROJECT") or None
+        self.usage = UsageMeter("requests", _env_int("GOOGLE_STT_DAILY_REQUEST_LIMIT", 200))
+        self._client = None
+        self._types = None
+        self._lock = threading.Lock()
+
+    def _load(self):
+        with self._lock:
+            if self._client is None:
+                try:
+                    from google.api_core.client_options import ClientOptions
+                    from google.cloud.speech_v2 import SpeechClient
+                    from google.cloud.speech_v2.types import cloud_speech
+                except ImportError as exc:
+                    raise SpeechToTextUnavailable(
+                        "The google-cloud-speech package is not installed.", code="STT_NOT_INSTALLED"
+                    ) from exc
+                try:
+                    if not self.project:
+                        import google.auth
+
+                        credentials, project = google.auth.default()
+                        self.project = project or getattr(credentials, "quota_project_id", None)
+                    if not self.project:
+                        raise SpeechToTextUnavailable(
+                            "Set GOOGLE_CLOUD_PROJECT to the project that has Speech-to-Text enabled.",
+                            code="STT_AUTH",
+                        )
+                    options = ClientOptions(api_endpoint=f"{self.location}-speech.googleapis.com",
+                                            quota_project_id=self.project)
+                    self._client = SpeechClient(client_options=options)
+                except SpeechToTextUnavailable:
+                    raise
+                except Exception as exc:  # no credentials, bad key file...
+                    kind, status, message = classify_google_error(exc)
+                    raise SpeechToTextUnavailable(message, code=f"STT_{kind.upper()}", status=status) from exc
+                self._types = cloud_speech
+        return self._types, self._client
+
+    def _recognize(self, audio: bytes, codes: list[str]) -> tuple[str, Optional[str], Optional[float]]:
+        """One billable request. Returns (transcript, language label, confidence)."""
+        types, client = self._load()
+        if not self.usage.reserve(1):
+            raise SpeechToTextUnavailable(
+                f"Today's speech recognition limit ({self.usage.daily_limit} requests) is used up. Please type.",
+                code="STT_DAILY_LIMIT", status=429,
+            )
+        request = types.RecognizeRequest(
+            recognizer=f"projects/{self.project}/locations/{self.location}/recognizers/_",
+            config=types.RecognitionConfig(
+                auto_decoding_config=types.AutoDetectDecodingConfig(),
+                language_codes=codes,
+                model=self.model,
+            ),
+            content=audio,
+        )
+        try:
+            response = client.recognize(request=request, retry=None, timeout=self.timeout)
+        except Exception as exc:
+            kind, status, message = classify_google_error(exc)
+            cls = SpeechToTextFailed if kind == "invalid" else SpeechToTextUnavailable
+            raise cls(message, code=f"STT_{kind.upper()}", status=status) from exc
+
+        billed = getattr(getattr(response, "metadata", None), "total_billed_duration", None)
+        if billed is not None and hasattr(billed, "total_seconds"):
+            self.usage.add_billed_seconds(billed.total_seconds())
+        texts, confidences, language = [], [], None
+        for result in response.results:
+            if not result.alternatives:
+                continue
+            best = result.alternatives[0]
+            if best.transcript.strip():
+                texts.append(best.transcript.strip())
+                if best.confidence:
+                    confidences.append(float(best.confidence))
+            language = language or (result.language_code or None)
+        transcript = " ".join(texts).strip()
+        return transcript, (_label(language, transcript) if transcript else None), (
+            min(confidences) if confidences else None)
+
+    def transcribe(self, audio: bytes, language_hint: Optional[str] = None) -> TranscriptionResult:
+        if not audio or len(audio) < 64:
+            raise SpeechToTextFailed("The recording is empty.", code="EMPTY_AUDIO")
+        if sniff_audio_format(audio) is None:  # reject before any billable call
+            raise SpeechToTextFailed(
+                "Unsupported audio format. Send WebM/Opus, Ogg/Opus, WAV or FLAC.",
+                code="STT_UNSUPPORTED_FORMAT", status=415,
+            )
+        from app.services.command_parser import dominant_language, has_marathi_grammar
+
+        marathi_first = language_hint == "mr"
+        first_codes = self.MARATHI_CODES if marathi_first else self.PRIMARY_CODES
+        transcript, language, confidence = self._recognize(audio, first_codes)
+        evidence = dominant_language(transcript) if transcript else None
+
+        second_codes = None
+        if marathi_first and (not transcript or evidence in ("en", "hi")):
+            second_codes = self.PRIMARY_CODES  # the worker switched away from Marathi
+        elif not marathi_first and transcript and has_marathi_grammar(transcript):
+            second_codes = self.MARATHI_CODES  # Marathi grammar heard through the en/hi model
+        if second_codes:
+            again, again_language, again_confidence = self._recognize(audio, second_codes)
+            if again:
+                transcript, language, confidence = again, again_language, again_confidence
+            if second_codes == self.MARATHI_CODES and again:
+                language = "mr"
+
+        if not transcript:
+            raise SpeechToTextFailed("No speech was recognised. Please try again or type.", code="STT_NO_SPEECH")
+        return TranscriptionResult(transcript, language or detect_language(transcript), confidence)
 
 
 class FasterWhisperEngine:
@@ -382,7 +527,9 @@ def get_engine() -> SpeechToTextEngine:
     if _engine is None:
         choice = os.getenv("STT_ENGINE", "none").strip().lower()
         if choice == "google":
-            _engine = GoogleSpeechEngine()
+            _engine = GoogleChirpSpeechEngine()  # v2 chirp_3, automatic en/hi/mr
+        elif choice == "google-v1":
+            _engine = GoogleSpeechEngine()  # v1 latest_short: biased to its first language
         elif choice == "faster-whisper":
             _engine = FasterWhisperEngine(os.getenv("STT_MODEL", "small"))
         else:

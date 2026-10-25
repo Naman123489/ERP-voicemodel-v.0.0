@@ -1,4 +1,4 @@
-﻿import pytest
+import pytest
 
 from app.services.command_parser import parse
 
@@ -11,10 +11,10 @@ from app.services.command_parser import parse
         ("Assemble 20 bicycles.", 20, "en"),
         ("I want to assemble 10 bicycles.", 10, "en"),
         ("assemble twenty five bicycles", 25, "en"),
-        ("αñ¼αÑÇαñ╕ αñ╕αñ╛αñçαñòαñ┐αñ▓ αñàαñ╕αÑçαñéαñ¼αñ▓ αñòαñ░αÑïαÑñ", 20, "hi"),
-        ("αñ╡αÑÇαñ╕ αñ╕αñ╛αñ»αñòαñ▓αÑÇ αñàαñ╕αÑçαñéαñ¼αñ▓ αñòαñ░αñ╛αÑñ", 20, "mr"),
+        ("बीस साइकिल असेंबल करो।", 20, "hi"),
+        ("वीस सायकली असेंबल करा।", 20, "mr"),
         ("20 cycle assemble karo.", 20, "mixed"),
-        ("αÑ¿αÑª αñ╕αñ╛αñ»αñòαñ▓αÑÇ αñàαñ╕αÑçαñéαñ¼αñ▓ αñòαñ░αñ╛", 20, "mr"),
+        ("२० सायकली असेंबल करा", 20, "mr"),
         ("do cycle banao", 2, "mixed"),
     ],
 )
@@ -36,9 +36,9 @@ def test_order_requests(text, quantity, language):
         ("18 cycle ban gaye.", 18),
         ("18", 18),
         ("athara", 18),
-        ("αñàαñáαñ░αñ╛", 18),
+        ("अठरा", 18),
         ("eighteen", 18),
-        ("αÑºαÑ« αñ╕αñ╛αñ»αñòαñ▓αÑÇ", 18),
+        ("१८ सायकली", 18),
     ],
 )
 def test_completed_quantity(text, quantity):
@@ -63,7 +63,7 @@ def test_assembled_is_not_assemble():
 
 
 @pytest.mark.parametrize("text", ["Assembly ho gaya", "assembly done", "assembly finished",
-                                  "αñàαñ╕αÑçαñéαñ¼αñ▓αÑÇ αñ╣αÑï αñùαñê", "αñ¬αÑéαñ░αÑìαñú αñ¥αñ╛αñ▓αÑç", "kaam khatam"])
+                                  "असेंबली हो गई", "पूर्ण झाले", "kaam khatam"])
 def test_assembly_finished_without_quantity(text):
     p = parse(text)
     assert p.intent == "report_assembly_finished"
@@ -72,8 +72,8 @@ def test_assembly_finished_without_quantity(text):
 
 # --- confirmation, cancellation, correction ---------------------------------
 
-@pytest.mark.parametrize("text", ["Yes, save it.", "Haan, save karo.", "haan", "yes", "αñ╣αÑïαñ»", "αñ╣αñ╛αñü",
-                                  "αñáαÑÇαñò αñ╣αÑê", "theek hai", "ok", "ho", "haan ji theek hai"])
+@pytest.mark.parametrize("text", ["Yes, save it.", "Haan, save karo.", "haan", "yes", "होय", "हाँ",
+                                  "ठीक है", "theek hai", "ok", "ho", "haan ji theek hai"])
 def test_confirm(text):
     assert parse(text).intent == "confirm"
 
@@ -90,21 +90,21 @@ def test_yes_inside_other_content_is_not_confirmation(text):
     assert parse(text).intent != "confirm"
 
 
-@pytest.mark.parametrize("text", ["No, cancel.", "cancel", "radd karo", "αñ░αñªαÑìαñª αñòαñ░αÑï", "stop", "αñ¿αñòαÑï"])
+@pytest.mark.parametrize("text", ["No, cancel.", "cancel", "radd karo", "रद्द करो", "stop", "नको"])
 def test_explicit_cancel(text):
     p = parse(text)
     assert p.intent == "cancel"
     assert p.cancel_scope == "order"
 
 
-@pytest.mark.parametrize("text", ["no", "nahi", "αñ¿αñ╣αÑÇαñé", "αñ¿αñ╛αñ╣αÑÇ"])
+@pytest.mark.parametrize("text", ["no", "nahi", "नहीं", "नाही"])
 def test_plain_no_is_reject(text):
     p = parse(text)
     assert p.intent == "cancel"
     assert p.cancel_scope == "reject"
 
 
-@pytest.mark.parametrize("text", ["nahi 17", "no, 17", "galat 17", "αñ¿αñ╣αÑÇαñé, αñ╕αññαÑìαñ░αñ╣", "actually 17"])
+@pytest.mark.parametrize("text", ["nahi 17", "no, 17", "galat 17", "नहीं, सत्रह", "actually 17"])
 def test_correction(text):
     p = parse(text)
     assert p.intent == "correct_previous_answer"
@@ -135,7 +135,7 @@ def test_unknown_and_ambiguous(text, reason):
 
 
 @pytest.mark.parametrize("text,kind", [("2.5 cycle", "fractional"), ("dhai cycle", "fractional"),
-                                       ("-3", "negative"), ("αñåαñºαñ╛", "fractional")])
+                                       ("-3", "negative"), ("आधा", "fractional")])
 def test_invalid_quantities_are_flagged_not_rounded(text, kind):
     p = parse(text)
     assert p.quantity is None
@@ -167,5 +167,5 @@ def test_hindi_softeners_do_not_flip_intent():
 
 
 def test_parser_never_raises_on_garbage():
-    for junk in ["!!!", "\x00", "≡ƒÜ▓≡ƒÜ▓", "a" * 600, "αÑºαÑ¿αÑ⌐αÑ¬αÑ½αÑ¼αÑ¡αÑ«αÑ»αÑª", "-", "...", "αñ¿", None]:
+    for junk in ["!!!", "\x00", "🚲🚲", "a" * 600, "१२३४५६७८९०", "-", "...", "न", None]:
         parse(junk)

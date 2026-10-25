@@ -1,4 +1,4 @@
-﻿"""Dialogue state machine: workflow, corrections, and safety properties.
+"""Dialogue state machine: workflow, corrections, and safety properties.
 
 No backend is involved: the dialogue manager only produces actions as data,
 and these tests feed it contract-shaped responses directly.
@@ -268,7 +268,7 @@ def test_cancel_resets_without_any_action():
 
 
 @pytest.mark.parametrize("state_name", ALL_STATES)
-@pytest.mark.parametrize("phrase", ["No, cancel.", "cancel", "radd karo", "αñ░αñªαÑìαñª αñòαñ░αÑï", "no", "nahi", "αñ¿αñòαÑï"])
+@pytest.mark.parametrize("phrase", ["No, cancel.", "cancel", "radd karo", "रद्द करो", "no", "nahi", "नको"])
 def test_cancellation_never_finalizes(state_name, phrase):
     dm, s = session_in(state_name)
     assert not is_finalize(say(dm, s, phrase))
@@ -277,7 +277,7 @@ def test_cancellation_never_finalizes(state_name, phrase):
 # --- unclear input never finalizes ----------------------------------------------
 
 UNCLEAR = ["", "hmm", "haan nahi", "yes cancel", "20 ya 25", "yes I want to assemble 20 bicycles",
-           "yesterday", "ok 2.5", "≡ƒÜ▓", "not finished"]
+           "yesterday", "ok 2.5", "🚲", "not finished"]
 
 
 @pytest.mark.parametrize("state_name", ALL_STATES)

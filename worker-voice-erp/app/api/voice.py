@@ -1,4 +1,4 @@
-﻿"""Voice routes (Person A): ``/api/v1/voice/*``.
+"""Voice routes (Person A): ``/api/v1/voice/*``.
 
 ``POST /turn`` parses the worker's words, runs the dialogue, and, when the
 dialogue asks for it, calls Person B's production API over HTTP exactly as the
@@ -38,6 +38,7 @@ from pydantic import BaseModel, Field, ValidationError
 from app.services import speech_to_text, text_to_speech
 from app.services.command_parser import LANGUAGES, parse
 from app.services.dialogue_manager import Action, ActionType, DialogueManager, Session, TurnResult
+from app.services.responses import LANGUAGE_NAMES, resolve_response_language
 from app.services.text_to_speech import MAX_TTS_CHARS, speech_profile
 
 router = APIRouter(prefix="/api/v1/voice", tags=["voice"])
@@ -195,7 +196,10 @@ def _bearer(request: Request) -> Optional[str]:
     return auth if auth.lower().startswith("bearer ") and auth[7:].strip() else None
 
 
-def _response(s: Session, r: TurnResult, parsed, suggested_action: str, backend: Optional[BackendResult]) -> dict:
+def _response(
+    s: Session, r: TurnResult, parsed, suggested_action: str, backend: Optional[BackendResult], language_reason: str
+) -> dict:
+    reply_language = s.language or "en"
     return {
         # contract fields
         "session_id": s.session_id,
@@ -207,10 +211,13 @@ def _response(s: Session, r: TurnResult, parsed, suggested_action: str, backend:
         # additions (see report / Person B handoff)
         "parse": parsed.to_dict(),
         "language": parsed.language,
+        "response_language": reply_language,  # en | hi | mr: language of assistant_text and its voice
+        "response_language_name": LANGUAGE_NAMES[reply_language],
+        "language_reason": language_reason,  # words | speech_recognition | conversation | script | default
         "outcome": r.outcome,
         "dialogue_state": s.snapshot(),
         "backend_response": backend.to_dict() if backend else None,
-        "speech": speech_profile(r.assistant_text),
+        "speech": speech_profile(r.assistant_text, reply_language),
     }
 
 
@@ -243,15 +250,18 @@ async def voice_turn(request: Request, client: ProductionApiClient = Depends(get
 
 def _run_turn(s: Session, req: TurnRequest, authorization: str, client: ProductionApiClient) -> dict:
     parsed = parse(req.transcript, confidence=req.confidence)
+    recognized = req.language if req.language in ("en", "hi", "mr") else None  # from speech recognition
     if parsed.language == "unknown" and req.language in LANGUAGES:
         parsed.language = req.language
+    # Reply in the worker's language. Language only changes wording, never the action taken.
+    s.language, language_reason = resolve_response_language(req.transcript, parsed, recognized, s.language)
     result = _manager.handle_turn(s, parsed)
     suggested_action = result.suggested_action  # the action taken this turn, if any
     backend = None
     if result.action is not None:
         backend = client.execute(result.action, authorization)
         result = _manager.handle_action_result(s, result.action.action_id, backend.status_code, backend.body)
-    return _response(s, result, parsed, suggested_action, backend)
+    return _response(s, result, parsed, suggested_action, backend, language_reason)
 
 
 @router.post("/reset")

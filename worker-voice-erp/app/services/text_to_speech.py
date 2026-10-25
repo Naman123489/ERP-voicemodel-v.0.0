@@ -1,4 +1,4 @@
-﻿"""Text-to-speech (Person A).
+"""Text-to-speech (Person A).
 
 Only turns text into audio. It knows nothing about commands, orders or stock.
 
@@ -90,13 +90,22 @@ class TextToSpeechEngine(Protocol):
 
 
 def speech_language(text: str, hint: Optional[str] = None) -> str:
-    """Pick hi/mr/en for the voice. English is the fallback for anything else."""
-    if hint in ("en", "hi", "mr"):
+    """Pick the hi/mr/en voice for this text.
+
+    The hint (the reply language) is used only when the text really is in that
+    script: Hindi/Marathi voices need Devanagari text, the English voice needs
+    Latin text. Otherwise the text itself decides, so a voice never reads a
+    language it was not made for.
+    """
+    has_devanagari = any("ऀ" <= ch <= "ॿ" for ch in text)
+    if hint in ("hi", "mr") and has_devanagari:
         return hint
+    if hint == "en" and not has_devanagari:
+        return "en"
     detected = detect_language(text)
     if detected in ("hi", "mr"):
         return detected
-    if detected == "mixed" and any("αñÇ" <= ch <= "αÑ┐" for ch in text):
+    if has_devanagari:
         return "hi"
     return "en"
 
